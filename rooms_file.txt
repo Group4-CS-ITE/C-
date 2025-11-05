@@ -1,1 +1,3 @@
-
+1001, Basic, 25, 1000, Available
+1002, Basic, 26, 1000, Available
+1003, Basic, 27, 1000, Occupied
