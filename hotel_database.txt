@@ -1,0 +1,9 @@
+1001|Single Bed Room|1000|UNRESERVED|-|-|-|-|-|Available
+1002|Single Bed Room|1000|ZACKT CORTA|18|1|10/25/25|10/27/25|2|Quiet room with good Wi-Fi signal.
+1003|Single Bed Room|1000|UNRESERVED|-|-|-|-|-|Available
+1004|Single Bed Room|1000|UNRESERVED|-|-|-|-|-|Available
+2001|Double Bed Room|2000|TATANG CRUZ|100|1|10/10/25|10/15/25|5|Room close to elevator.
+2002|Double Bed Room|2000|UNRESERVED|-|-|-|-|-|Available
+2003|Double Bed Room|2000|JOHN WICKED|31|1|10/18/25|10/22/25|4|Near parking area.
+2004|Double Bed Room|2000|UNRESERVED|-|-|-|-|-|Available
+2005|Double Bed Room|2000|UNRESERVED|-|-|-|-|-|Available
