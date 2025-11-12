@@ -28,7 +28,7 @@ void introduction(GuestInfo &guest);
 void separationSystem(GuestInfo &guest);
 void shutdownSystem();
 
-// Guest booking module (original functions)
+// Guest booking module (original function names preserved)
 void listRooms();
 void listAvailable();
 void bookRoom();
@@ -37,9 +37,9 @@ void viewBooked();
 
 // Another booking module (the other large booking block)
 RoomBooking getRoomInfo_v2(int roomNum);
-void bookingLoop_v2(); // the second big booking main logic
+void bookingLoop_v2(); // the second big booking main logic (adapted to single DB)
 
-// Customer Management and billing/invoice
+// Customer Management and billing/invoice (function names preserved)
 void customerManagement_v1(); // first small customer management snippet
 void customerManagement_v2(); // improved V2
 void billingSystem();
@@ -49,16 +49,120 @@ void printInvoice(const string &name, int age, const string &roomNumber, const s
                   const string &paymentMethod, const string &paymentStatus, const string &specialRequest);
 
 // Staff features
-void staffMenu(); // integrated staff menu
+void staffMenu(); // integrated staff menu (unchanged layout)
 void analyticsReport();
 void realTimeAvailability();
-void reservationCancellation(); // uses booking file cancellation
+void reservationCancellation(); // wrapper to cancelBook()
+
+// Database helpers (new)
+void initializeDatabase();
+vector<string> splitFields(const string &line, char delim='|');
+bool findRecordByRoom(const string &roomNum, vector<string> &outFields, string &outLine);
+bool updateRecordLine(const string &oldLine, const string &newLine);
+void writeDefaultDatabaseIfMissing();
+string trim(const string &s);
 
 // Misc helpers
 void pauseReturn();
 
 // ---------------------- IMPLEMENTATION ----------------------
-string username;
+
+string username; // small variable used by introduction / staff greeting
+const string DB_FILENAME = "hotel_database.txt";
+
+// ---------- DATABASE HELPERS ----------
+string trim(const string &s) {
+    size_t a = 0;
+    while (a < s.size() && isspace((unsigned char)s[a])) ++a;
+    size_t b = s.size();
+    while (b > a && isspace((unsigned char)s[b-1])) --b;
+    return s.substr(a, b-a);
+}
+
+vector<string> splitFields(const string &line, char delim) {
+    vector<string> out;
+    string field;
+    stringstream ss(line);
+    while (getline(ss, field, delim)) {
+        out.push_back(field);
+    }
+    return out;
+}
+
+// Replace a single line in DB file (oldLine -> newLine). Returns true on success.
+bool updateRecordLine(const string &oldLine, const string &newLine) {
+    ifstream fin(DB_FILENAME);
+    if (!fin) return false;
+    ofstream fout("db_tmp.txt");
+    string line;
+    bool replaced = false;
+    while (getline(fin, line)) {
+        if (!replaced && line == oldLine) {
+            fout << newLine << '\n';
+            replaced = true;
+        } else {
+            fout << line << '\n';
+        }
+    }
+    fin.close();
+    fout.close();
+    if (!replaced) {
+        // no change
+        remove("db_tmp.txt");
+        return false;
+    }
+    remove(DB_FILENAME.c_str());
+    rename("db_tmp.txt", DB_FILENAME.c_str());
+    return true;
+}
+
+// Find record by room number. If found, returns true and fills outFields (split by '|') and outLine (original).
+bool findRecordByRoom(const string &roomNum, vector<string> &outFields, string &outLine) {
+    ifstream fin(DB_FILENAME);
+    if (!fin) return false;
+    string line;
+    while (getline(fin, line)) {
+        vector<string> fields = splitFields(line, '|');
+        if (!fields.empty() && trim(fields[0]) == trim(roomNum)) {
+            outFields = fields;
+            outLine = line;
+            fin.close();
+            return true;
+        }
+    }
+    fin.close();
+    return false;
+}
+
+// Create default DB if missing
+void writeDefaultDatabaseIfMissing() {
+    ifstream fin(DB_FILENAME);
+    if (fin) { fin.close(); return; } // already exists
+    ofstream fout(DB_FILENAME);
+    if (!fout) {
+        cout << "Warning: Cannot create " << DB_FILENAME << " in current directory.\n";
+        return;
+    }
+    // Format per line:
+    // roomNum|roomType|price|name|age|people|checkIn|checkOut|nights|note
+    // For unreserved rooms, name = UNRESERVED and note = Available
+    fout << "1001|Single Bed Room|1000|SICKS SEVEN|67|1|10/20/25|10/23/25|3|Extra pillows and a cup of warm tea.\n";
+    fout << "1002|Single Bed Room|1000|ZACKT CORTA|18|1|10/25/25|10/27/25|2|Quiet room with good Wi-Fi signal.\n";
+    fout << "1003|Single Bed Room|1000|UNRESERVED|-|-|-|-|-|Available\n";
+    fout << "1004|Single Bed Room|1000|UNRESERVED|-|-|-|-|-|Available\n";
+    fout << "2001|Double Bed Room|2000|TATANG CRUZ|100|1|10/10/25|10/15/25|5|Room close to elevator.\n";
+    fout << "2002|Double Bed Room|2000|UNRESERVED|-|-|-|-|-|Available\n";
+    fout << "2003|Double Bed Room|2000|JOHN WICKED|31|1|10/18/25|10/22/25|4|Near parking area.\n";
+    fout << "2004|Double Bed Room|2000|UNRESERVED|-|-|-|-|-|Available\n";
+    fout << "2005|Double Bed Room|2000|GINOONG HALIMAW|22|1|10/23/25|10/26/25|3|Room with strong air conditioning.\n";
+    fout.close();
+    cout << "Created default database file: " << DB_FILENAME << " (you can edit it manually if needed)\n";
+}
+
+void initializeDatabase() {
+    writeDefaultDatabaseIfMissing();
+}
+
 // ---------- INTRODUCTION ----------
 void introduction(GuestInfo &guest) {
     // Preserved original introduction prompts (adapted to avoid re-declaring main)
@@ -66,7 +170,9 @@ void introduction(GuestInfo &guest) {
     cout << "****Please enjoy your stay.****" << endl;
     cout << "" << endl;
     cout << "Please input your name" << endl;
+    // read single-word name like original code did (cin >> username)
     cin >> username;
+    guest.name = username; // set guest struct name too
     cout << "" << endl;
     cout << "Welcome " << guest.name << endl;;
     cout << "" << endl;
@@ -83,217 +189,161 @@ void introduction(GuestInfo &guest) {
     cout << endl;
 }
 
-// ---------- GUEST BOOKING MODULE (original functions) ----------
+// ---------- GUEST BOOKING MODULE (reworked to single DB) ----------
 void listRooms() {
-    string roomNum, roomType, bedNum, dailyRate, status;
-    ifstream RoomsFile;
-    // original used ios::out incorrectly; corrected to ios::in but preserved behavior
-    RoomsFile.open("rooms_file.txt", ios::in);
-    if (!RoomsFile) {
-        cout << "No file was read" << endl;
+    // prints all rooms from DB with columns similar to original listRooms
+    ifstream fin(DB_FILENAME);
+    if (!fin) {
+        cout << "No file was read (database missing)." << endl;
+        return;
     }
-    else {
-        string line;
-        cout << left << setw(15) << "Room Number" << setw(25) << "Room Type" << setw(15) << "Beds" << setw(15) << "Daily Rate" << setw(15) << "Status" << endl;
-        while (getline(RoomsFile,line)) {
-            stringstream ss(line);
-            getline(ss, roomNum, ',');
-            getline(ss, roomType, ',');
-            getline(ss, bedNum, ',');
-            getline(ss, dailyRate, ',');
-            getline(ss, status);
-            cout << left << setw(15) << roomNum << setw(25) << roomType << setw(15) << bedNum << setw(15) << dailyRate <<setw(15) <<status <<endl;
+    cout << left << setw(15) << "Room Number" << setw(25) << "Room Type" << setw(10) << "Beds" << setw(15) << "Daily Rate" << setw(15) << "Status" << endl;
+    string line;
+    while (getline(fin, line)) {
+        vector<string> f = splitFields(line, '|');
+        if (f.size() >= 10) {
+            string roomNum = trim(f[0]);
+            string roomType = trim(f[1]);
+            string price = trim(f[2]);
+            string name = trim(f[3]);
+            string people = trim(f[5]); // beds equivalence
+            string note = trim(f[9]);
+            string status = (name == "UNRESERVED" || name == "-") ? "Available" : "Occupied";
+            cout << left << setw(15) << roomNum << setw(25) << roomType << setw(10) << people << setw(15) << price << setw(15) << status << endl;
         }
     }
+    fin.close();
     cout << endl;
 }
 
 void listAvailable() {
-    string roomNum, roomType, bedNum, dailyRate, status;
-    ifstream RoomsFile;
-    RoomsFile.open("rooms_file.txt", ios::in);
-    if (!RoomsFile) {
-        cout << "No file was read" << endl;
+    ifstream fin(DB_FILENAME);
+    if (!fin) {
+        cout << "No file was read (database missing)." << endl;
         return;
     }
-    cout << setw(15) << "Room Number" << setw(25) << "Room Type" << setw(15) << "Beds" << setw(15) << "Daily Rate" <<setw(15) <<"Status" <<endl;
+    cout << setw(15) << "Room Number" << setw(25) << "Room Type" << setw(10) << "Beds" << setw(15) << "Daily Rate" << setw(15) << "Status" << endl;
     string line;
-    while (getline(RoomsFile,line)) {
-        stringstream ss(line);
-        getline(ss, roomNum, ',');
-        getline(ss, roomType, ',');
-        getline(ss, bedNum, ',');
-        getline(ss, dailyRate, ',');
-        getline(ss, status);
-        if(status=="Available"){
-            cout << setw(15) << roomNum << setw(25) << roomType << setw(15) << bedNum << setw(15) << dailyRate <<setw(15) <<status <<endl;
+    while (getline(fin, line)) {
+        vector<string> f = splitFields(line, '|');
+        if (f.size() >= 10) {
+            string roomNum = trim(f[0]);
+            string roomType = trim(f[1]);
+            string price = trim(f[2]);
+            string name = trim(f[3]);
+            string people = trim(f[5]);
+            string status = (name == "UNRESERVED" || name == "-") ? "Available" : "Occupied";
+            if (status == "Available") {
+                cout << setw(15) << roomNum << setw(25) << roomType << setw(10) << people << setw(15) << price << setw(15) << status << endl;
+            }
         }
     }
+    fin.close();
     cout << endl;
-    return;
 }
 
 void bookRoom() {
-    int a=0;
-    string get_roomNum, roomNum, roomType, bedNum, dailyRate, status;
+    // Adapted to single DB: mark an UNRESERVED room as occupied, writing guest info into the DB line
+    cout << "Enter the room number you would like to book: ";
+    string get_roomNum;
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
-    cout<<"Enter the room number you would like to book: ";
-    getline(cin,get_roomNum);
+    getline(cin, get_roomNum);
+    get_roomNum = trim(get_roomNum);
 
-    ifstream roomsFile;
-    roomsFile.open("rooms_file.txt", ios::in);
-    ofstream bookRoomFile;
-    ofstream roomsFileCopy;
-    roomsFileCopy.open("roomsFileCopy.txt", ios::app);
-    bookRoomFile.open("usrBookedRooms.txt", ios::app);
-
-    if(!roomsFile) {
-        cout << "rooms_file.txt not found." << endl;
-        // close files if any opened
-        if(roomsFileCopy.is_open()) roomsFileCopy.close();
-        if(bookRoomFile.is_open()) bookRoomFile.close();
+    vector<string> fields;
+    string origLine;
+    if (!findRecordByRoom(get_roomNum, fields, origLine)) {
+        cout << "Room number not found.\n";
+        return;
+    }
+    // fields layout: 0 roomNum|1 roomType|2 price|3 name|4 age|5 people|6 checkIn|7 checkOut|8 nights|9 note
+    string currName = trim(fields[3]);
+    if (currName != "UNRESERVED" && currName != "-") {
+        cout << "The room is already occupied.\n";
         return;
     }
 
-    string line;
-    bool found = false;
-    while(getline(roomsFile, line)) {
-        stringstream ss(line);
-        getline(ss, roomNum, ',');
-        getline(ss, roomType, ',');
-        getline(ss, bedNum, ',');
-        getline(ss, dailyRate, ',');
-        getline(ss, status);
-        if (roomNum==get_roomNum) {
-            found = true;
-            if (status!="Occupied") {
-                bookRoomFile <<roomNum <<"," <<roomType <<"," <<bedNum <<"," <<dailyRate <<endl;   
-                roomsFileCopy <<roomNum <<"," <<roomType <<"," <<bedNum <<"," <<dailyRate <<',' << "Occupied"  <<endl;
-            } else {
-                cout<<"The room is already occupied."<<endl<<endl;
-                roomsFile.close();
-                roomsFileCopy.close();
-                bookRoomFile.close();
-                // cleanup copy file
-                remove("roomsFileCopy.txt");
-                return;
-            }
+    // gather booking details from user
+    string guestName;
+    int guestAge;
+    string numPeople;
+    string checkIn, checkOut;
+    int nights;
 
-        } else {
-            roomsFileCopy <<roomNum <<"," <<roomType <<"," <<bedNum <<"," <<dailyRate <<',' << status  <<endl;
-        }
-
+    cout << "Enter guest name: ";
+    getline(cin, guestName);
+    cout << "Enter guest age: ";
+    while (!(cin >> guestAge)) {
+        cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); cout << "Enter numeric age: ";
     }
-
-    if(!found) {
-        cout << "Room number not found." << endl;
-        roomsFile.close();
-        roomsFileCopy.close();
-        bookRoomFile.close();
-        remove("roomsFileCopy.txt");
-        return;
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cout << "How many people: ";
+    getline(cin, numPeople);
+    cout << "Check-in (MM/DD/YY): ";
+    getline(cin, checkIn);
+    cout << "Check-out (MM/DD/YY): ";
+    getline(cin, checkOut);
+    cout << "Number of nights: ";
+    while (!(cin >> nights)) {
+        cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); cout << "Enter numeric nights: ";
     }
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
-    cout<<"Booked room successfully"<<endl;
-    roomsFile.close();
-    roomsFileCopy.close();
-    bookRoomFile.close();
-    remove("rooms_file.txt");
-    rename("roomsFileCopy.txt", "rooms_file.txt");
-    return;
+    // build new line replacing fields 3..9
+    // Keep price intact at fields[2]
+    string newLine = fields[0] + "|" + fields[1] + "|" + fields[2] + "|"
+                     + guestName + "|" + to_string(guestAge) + "|" + numPeople + "|"
+                     + checkIn + "|" + checkOut + "|" + to_string(nights) + "|"
+                     + "Booked via system";
+
+    if (updateRecordLine(origLine, newLine)) {
+        cout << "Booked room successfully\n";
+    } else {
+        cout << "Failed to update database. Try again.\n";
+    }
 }
 
 void cancelBook() {
-    string roomNum, roomType, bedNum, dailyRate, get_roomNum, line, status;
-    ifstream usrBookedIn;
-    ifstream roomsFile;
-    // original code had usrBookedIn.open("borrowed_books.txt", ios::in);
-    // It appears they intended a user-booked-file; preserve original but add fallback to usrBookedRooms.txt
-    roomsFile.open("rooms_file.txt", ios::in);
-    usrBookedIn.open("usrBookedRooms.txt", ios::in);
-    if(!usrBookedIn) { // try fallback filename used earlier in some snippets
-        usrBookedIn.open("borrowed_books.txt", ios::in);
+    // Adapted to single DB: set the record back to UNRESERVED
+    cout << "Enter the room number you would like to cancel: ";
+    string get_roomNum;
+    cin >> get_roomNum;
+    get_roomNum = trim(get_roomNum);
+    vector<string> fields;
+    string origLine;
+    if (!findRecordByRoom(get_roomNum, fields, origLine)) {
+        cout << "Room not found.\n";
+        return;
     }
-
-    ofstream usrBookedOut;
-    ofstream copyRoomsFile;
-    usrBookedOut.open("usrBookedOut.txt", ios::app);
-    copyRoomsFile.open("copyRoomsFile.txt", ios::app);
-
-    cout<<"Enter the room number you would like to cancel: ";
-    cin>>get_roomNum;
-
-    if(usrBookedIn) {
-        while (getline(usrBookedIn,line)) {
-            stringstream ss(line);
-            getline(ss, roomNum, ',');
-            getline(ss, roomType, ',');
-            getline(ss, bedNum, ',');
-            getline(ss, dailyRate);
-
-            if (roomNum!=get_roomNum) {
-                usrBookedOut <<roomNum <<"," <<roomType <<"," <<bedNum <<"," <<dailyRate<<endl;
-            }    
-        }
+    // build new line setting fields 3..9 to UNRESERVED / dashes
+    string newLine = fields[0] + "|" + fields[1] + "|" + fields[2] + "|UNRESERVED|-|-|-|-|-|Available";
+    if (updateRecordLine(origLine, newLine)) {
+        cout << "Reservation for room " << get_roomNum << " cancelled.\n";
     } else {
-        // no booked file found
+        cout << "Failed to cancel reservation (database error).\n";
     }
-
-    if(roomsFile) {
-        while (getline(roomsFile, line)) {
-            stringstream ss(line);
-            getline(ss, roomNum, ',');
-            getline(ss, roomType, ',');
-            getline(ss, bedNum, ',');
-            getline(ss, dailyRate, ',');
-            getline(ss, status);
-
-            if (roomNum==get_roomNum) {
-                copyRoomsFile <<roomNum <<"," <<roomType <<"," <<bedNum <<"," <<dailyRate<<",Available" <<endl;
-            } else {
-                copyRoomsFile <<roomNum <<"," <<roomType <<"," <<bedNum <<"," <<dailyRate<<"," <<status <<endl;
-            }
-        }
-    } else {
-        cout << "rooms_file.txt not found while cancelling." << endl;
-    }
-
-    copyRoomsFile.close();
-    usrBookedOut.close();
-    if(usrBookedIn.is_open()) usrBookedIn.close();
-    if(roomsFile.is_open()) roomsFile.close();
-
-    remove("rooms_file.txt");
-    remove("usrBookedRooms.txt");
-    rename("usrBookedOut.txt", "usrBookedRooms.txt");
-    rename("copyRoomsFile.txt", "rooms_file.txt");
-    return;
 }
 
 void viewBooked() {
-    string roomNum, roomType, bedNum, dailyRate, status;
-    ifstream usrBooked;
-    usrBooked.open("usrBookedRooms.txt", ios::in);
-    if (!usrBooked) {
-        cout<<"No file was read"<<endl;
+    // Show bookings: all lines where name != UNRESERVED
+    ifstream fin(DB_FILENAME);
+    if (!fin) { cout << "No file was read (database missing).\n"; return; }
+    cout << setw(15) << "Room Number" << setw(25) << "Room Type" << setw(20) << "Guest Name" << setw(8) << "Age" << setw(8) << "Nights" << setw(15) << "Daily Rate" << endl;
+    string line;
+    while (getline(fin, line)) {
+        vector<string> f = splitFields(line, '|');
+        if (f.size() >= 10) {
+            string name = trim(f[3]);
+            if (name != "UNRESERVED" && name != "-") {
+                cout << left << setw(15) << trim(f[0]) << setw(25) << trim(f[1]) << setw(20) << trim(f[3]) << setw(8) << trim(f[4]) << setw(8) << trim(f[8]) << setw(15) << trim(f[2]) << endl;
+            }
+        }
     }
-    else {
-        cout << setw(15) << "Room Number" << setw(25) << "Room Type" << setw(15) << "Beds" << setw(15) << "Daily Rate" <<endl;
-        string line;
-        while (getline(usrBooked,line)) {
-            stringstream ss(line);
-            getline(ss, roomNum, ',');
-            getline(ss, roomType, ',');
-            getline(ss, bedNum, ',');
-            getline(ss, dailyRate);
-            cout << left << setw(15) << roomNum << setw(25) << roomType << setw(15) << bedNum << setw(15) << dailyRate <<endl;
-        }   
-    }
-    cout<<endl;
-    return;
+    fin.close();
+    cout << endl;
 }
 
-// ---------- SECOND BOOKING MODULE (the larger booking logic) ----------
+// ---------- SECOND BOOKING MODULE (Group-4 booking loop) ----------
 RoomBooking getRoomInfo_v2(int roomNum) {
     RoomBooking room{};
     room.roomNum = roomNum;
@@ -303,7 +353,7 @@ RoomBooking getRoomInfo_v2(int roomNum) {
             room.roomType = "Single";
             room.roomPrice = 1000;
             break;
-        case 2001: case 2002: case 2003: case 2004:
+        case 2001: case 2002: case 2003: case 2004: case 2005:
             room.roomType = "Double";
             room.roomPrice = 2000;
             break;
@@ -315,6 +365,7 @@ RoomBooking getRoomInfo_v2(int roomNum) {
 }
 
 void bookingLoop_v2() {
+    // Adapted: when user confirms, we will mark each selected room in hotel_database.txt
     vector<RoomBooking> bookedRooms;
     int sched, totalPrice = 0;
     char rep, select, add;
@@ -325,12 +376,7 @@ void bookingLoop_v2() {
     cout << " \t\t\t\t\t*               By Group 4              *\n";
     cout << " \t\t\t\t\t*****************************************\n\n";
 
-    fstream file("bookings.txt", ios::in | ios::out | ios::app);
-    if (!file) {
-        cout << "Error opening bookings.txt\n";
-        return;
-    }
-
+    // we won't open a separate bookings.txt now; we'll write into hotel_database.txt entries
     do {
         bookedRooms.clear();
         totalPrice = 0;
@@ -346,6 +392,7 @@ void bookingLoop_v2() {
         cout<<" 2002 \t\t Double \t 2000\n";
         cout<<" 2003 \t\t Double \t 2000\n";
         cout<<" 2004 \t\t Double \t 2000\n";
+        cout<<" 2005 \t\t Double \t 2000\n";
         cout << "*****************************************\n";
 
         do {
@@ -399,14 +446,34 @@ void bookingLoop_v2() {
             cin.ignore(numeric_limits<streamsize>::max(), '\n');
             getline(cin, guestName);
 
-            file<< left << setw(20) << guestName
-                << setw(10) << sched
-                << setw(10) << totalPrice
-                << "Rooms: ";
+            // We'll set the first room's details (and all selected rooms if desired)
+            // Ask for additional details:
+            string ageStr, peopleStr, checkIn, checkOut;
+            cout << "Enter guest age: ";
+            int gAge;
+            while(!(cin >> gAge)) { cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); cout << "Enter numeric age: "; }
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Enter number of people in room: ";
+            getline(cin, peopleStr);
+            cout << "Enter check-in date (MM/DD/YY): ";
+            getline(cin, checkIn);
+            cout << "Enter check-out date (MM/DD/YY): ";
+            getline(cin, checkOut);
 
-            for(auto &room : bookedRooms)
-                file << room.roomNum << " ";
-            file << endl;
+            // Update DB for each room in bookedRooms
+            for (auto &room : bookedRooms) {
+                string roomNumStr = to_string(room.roomNum);
+                vector<string> f;
+                string origLine;
+                if (findRecordByRoom(roomNumStr, f, origLine)) {
+                    string newLine = f[0] + "|" + f[1] + "|" + f[2] + "|" + guestName + "|" + to_string(gAge) + "|" + peopleStr + "|" + checkIn + "|" + checkOut + "|" + to_string(sched) + "|Booked via bookingLoop_v2";
+                    if (!updateRecordLine(origLine, newLine)) {
+                        cout << "Warning: could not update room " << roomNumStr << " in DB.\n";
+                    }
+                } else {
+                    cout << "Warning: room " << roomNumStr << " not found in DB.\n";
+                }
+            }
 
             cout<<"\nTransaction saved successfully!\n";
         }
@@ -416,12 +483,11 @@ void bookingLoop_v2() {
 
     } while (rep == 'Y' || rep == 'y');
 
-    file.close();
-    cout << "\nAll bookings have been saved in 'bookings.txt'.\n";
+    cout << "\nBooking flow finished. (All bookings saved into " << DB_FILENAME << ")\n";
     return;
 }
 
-// ---------- CUSTOMER MANAGEMENT / BILLING / INVOICING ----------
+// ---------- CUSTOMER MANAGEMENT / BILLING / INVOICING (adapted to single DB) ----------
 void customerManagement_v1() {
     int guestchoice;
     char again;
@@ -445,85 +511,44 @@ void customerManagement_v1() {
         cin >> guestchoice;
         cout << endl;
 
-        switch (guestchoice) {
-            case 1: {
-                int nights = 3;
-                int rate = 1000;
-                cout << "ROOM NUMBER: 1001\nROOM TYPE: Single Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: SICKS SEVEN\nAGE: 67\nHOW MANY PEOPLE: 1" << endl;
-                cout << "Check-in: 10/20/25\nCheck-out: 10/23/25" << endl;
-                cout << "Length of stay: " << nights << " nights" << endl;
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Extra pillows and a cup of warm tea." << endl;
-                break;
+        // Map choices to room numbers:
+        // 1->1001,2->1002,3->1003,4->2001,5->2002,6->2003,7->2004,8->2005
+        vector<string> mapRooms = {"1001","1002","1003","2001","2002","2003","2004","2005"};
+        string roomSel = mapRooms[(guestchoice>=1 && guestchoice<=8) ? (guestchoice-1) : 0];
+
+        vector<string> f;
+        string line;
+        if (guestchoice < 1 || guestchoice > 8) {
+            cout << "Invalid choice. Please enter a number between 1 and 8." << endl;
+        } else {
+            if (findRecordByRoom(roomSel, f, line) && f.size() >= 10) {
+                string name = trim(f[3]);
+                string age = trim(f[4]);
+                string people = trim(f[5]);
+                string checkIn = trim(f[6]);
+                string checkOut = trim(f[7]);
+                string nights = trim(f[8]);
+                string priceStr = trim(f[2]);
+                int rate = 0;
+                try { rate = stoi(priceStr); } catch(...) { rate = 0; }
+                int nightsInt = 0;
+                try { nightsInt = stoi(nights); } catch(...) { nightsInt = 0; }
+
+                if (name == "UNRESERVED" || name == "-") {
+                    // keep similar message to original "This room is available for reservations."
+                    cout << "ROOM NUMBER: " << roomSel << "\nROOM TYPE: " << trim(f[1]) << "\nPRICE PER NIGHT: ₱" << rate << endl;
+                    cout << "This room is available for reservations." << endl;
+                } else {
+                    cout << "ROOM NUMBER: " << roomSel << "\nROOM TYPE: " << trim(f[1]) << "\nPRICE PER NIGHT: ₱" << rate << endl;
+                    cout << "NAME: " << name << "\nAGE: " << age << "\nHOW MANY PEOPLE: " << people << endl;
+                    cout << "Check-in: " << checkIn << "\nCheck-out: " << checkOut << endl;
+                    cout << "Length of stay: " << nightsInt << " nights" << endl;
+                    cout << "Total Price: ₱" << (nightsInt * rate) << endl;
+                    cout << "Special requests: " << trim(f[9]) << endl;
+                }
+            } else {
+                cout << "Data for room " << roomSel << " not found in the database.\n";
             }
-
-            case 2: {
-                int nights = 2;
-                int rate = 1000;
-                cout << "ROOM NUMBER: 1002\nROOM TYPE: Single Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: ZACKT CORTA\nAGE: 18\nHOW MANY PEOPLE: 1" << endl;
-                cout << "Check-in: 10/25/25\nCheck-out: 10/27/25" << endl;
-                cout << "Length of stay: " << nights << " nights" << endl;
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Quiet room with good Wi-Fi signal." << endl;
-                break;
-            }
-
-            case 3:
-                cout << "ROOM NUMBER: 1003\nROOM TYPE: Single Bed Room\nPRICE PER NIGHT: ₱1,000" << endl;
-                cout << "This room is available for reservations." << endl;
-                break;
-
-            case 4: {
-                int nights = 5;
-                int rate = 2000;
-                cout << "ROOM NUMBER: 2001\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: TATANG CRUZ\nAGE: 100\nHOW MANY PEOPLE: 1" << endl;
-                cout << "Check-in: 10/10/25\nCheck-out: 10/15/25" << endl;
-                cout << "Length of stay: " << nights << " nights" << endl;
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Room close to elevator." << endl;
-                break;
-            }
-
-            case 5:
-                cout << "ROOM NUMBER: 2002\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱2,000" << endl;
-                cout << "This room is available for reservations." << endl;
-                break;
-
-            case 6: {
-                int nights = 4;
-                int rate = 2000;
-                cout << "ROOM NUMBER: 2003\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: JOHN WICKED\nAGE: 31\nHOW MANY PEOPLE: 1" << endl;
-                cout << "Check-in: 10/18/25\nCheck-out: 10/22/25" << endl;
-                cout << "Length of stay: " << nights << " nights" << endl;
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Near parking area." << endl;
-                break;
-            }
-
-            case 7:
-                cout << "ROOM NUMBER: 2004\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱2,000" << endl;
-                cout << "This room is available for reservations." << endl;
-                break;
-
-            case 8: {
-                int nights = 3;
-                int rate = 2000;
-                cout << "ROOM NUMBER: 2004\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: GINOONG HALIMAW\nAGE: 22\nHOW MANY PEOPLE: 1" << endl;
-                cout << "Check-in: 10/23/25\nCheck-out: 10/26/25" << endl;
-                cout << "Length of stay: " << nights << " nights" << endl;
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Room with strong air conditiong." << endl;
-                break;
-            }
-
-            default:
-                cout << "Invalid choice. Please enter a number between 1 and 8." << endl;
-                break;
         }
 
         cout << "\nWould you like to check another guest? (Y/N): ";
@@ -563,72 +588,38 @@ void customerManagement_v2() {
 
         cout << endl;
 
-        switch (guestchoice) {
-            case 1: {
-                int nights = 3, rate = 1000;
-                cout << "ROOM NUMBER: 1001\nROOM TYPE: Single Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: SICKS SEVEN\nAGE: 67\nHOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/20/25\nCheck-out: 10/23/25\n";
-                cout << "Length of stay: " << nights << " nights\n";
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Extra pillows and a cup of warm tea.\n";
-                break;
+        vector<string> mapRooms = {"1001","1002","1003","2001","2002","2003","2004","2005"};
+        if (guestchoice < 1 || guestchoice > 8) {
+            cout << "Invalid choice. Please enter a number between 1 and 8.\n";
+        } else {
+            string roomSel = mapRooms[guestchoice - 1];
+            vector<string> f; string line;
+            if (findRecordByRoom(roomSel, f, line) && f.size() >= 10) {
+                string name = trim(f[3]);
+                string age = trim(f[4]);
+                string people = trim(f[5]);
+                string checkIn = trim(f[6]);
+                string checkOut = trim(f[7]);
+                string nights = trim(f[8]);
+                string price = trim(f[2]);
+                int nightsInt=0, rate=0;
+                try { nightsInt = stoi(nights); } catch(...) { nightsInt = 0; }
+                try { rate = stoi(price); } catch(...) { rate = 0; }
+
+                if (name == "UNRESERVED" || name == "-") {
+                    cout << "ROOM NUMBER: " << roomSel << "\nROOM TYPE: " << trim(f[1]) << "\nPRICE PER NIGHT: ₱" << rate << endl;
+                    cout << "This room is available for reservations.\n";
+                } else {
+                    cout << "ROOM NUMBER: " << roomSel << "\nROOM TYPE: " << trim(f[1]) << "\nPRICE PER NIGHT: ₱" << rate << endl;
+                    cout << "NAME: " << name << "\nAGE: " << age << "\nHOW MANY PEOPLE: " << people << "\n";
+                    cout << "Check-in: " << checkIn << "\nCheck-out: " << checkOut << "\n";
+                    cout << "Length of stay: " << nightsInt << " nights\n";
+                    cout << "Total Price: ₱" << nightsInt * rate << endl;
+                    cout << "Special requests: " << trim(f[9]) << "\n";
+                }
+            } else {
+                cout << "No data found for that room.\n";
             }
-            case 2: {
-                int nights = 2, rate = 1000;
-                cout << "ROOM NUMBER: 1002\nROOM TYPE: Single Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: ZACKT CORTA\nAGE: 18\nHOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/25/25\nCheck-out: 10/27/25\n";
-                cout << "Length of stay: " << nights << " nights\n";
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Quiet room with good Wi-Fi signal.\n";
-                break;
-            }
-            case 3:
-                cout << "ROOM NUMBER: 1003\nROOM TYPE: Single Bed Room\nPRICE PER NIGHT: ₱1,000\n";
-                cout << "This room is available for reservations.\n";
-                break;
-            case 4: {
-                int nights = 5, rate = 2000;
-                cout << "ROOM NUMBER: 2001\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: TATANG CRUZ\nAGE: 100\nHOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/10/25\nCheck-out: 10/15/25\n";
-                cout << "Length of stay: " << nights << " nights\n";
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Room close to elevator.\n";
-                break;
-            }
-            case 5:
-                cout << "ROOM NUMBER: 2002\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱2,000\n";
-                cout << "This room is available for reservations.\n";
-                break;
-            case 6: {
-                int nights = 4, rate = 2000;
-                cout << "ROOM NUMBER: 2003\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: JOHN WICKED\nAGE: 31\nHOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/18/25\nCheck-out: 10/22/25\n";
-                cout << "Length of stay: " << nights << " nights\n";
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Near parking area.\n";
-                break;
-            }
-            case 7:
-                cout << "ROOM NUMBER: 2004\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱2,000\n";
-                cout << "This room is available for reservations.\n";
-                break;
-            case 8: {
-                int nights = 3, rate = 2000;
-                cout << "ROOM NUMBER: 2005\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱" << rate << endl;
-                cout << "NAME: GINOONG HALIMAW\nAGE: 22\nHOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/23/25\nCheck-out: 10/26/25\n";
-                cout << "Length of stay: " << nights << " nights\n";
-                cout << "Total Price: ₱" << nights * rate << endl;
-                cout << "Special requests: Room with strong air conditioning.\n";
-                break;
-            }
-            default:
-                cout << "Invalid choice. Please enter a number between 1 and 8.\n";
-                break;
         }
 
         cout << "\nWould you like to check another guest? (Y/N): ";
@@ -663,93 +654,42 @@ void billingSystem() {
         cin >> guestchoice;
         cout << endl;
 
-        bool reserved = true; // flag to control billing system
+        bool reserved = true; // assume reserved unless DB says UNRESERVED
 
-        switch (guestchoice) {
-            case 1:
-                cout << "ROOM NUMBER: 1001\n";
-                cout << "ROOM TYPE: Single Bed Room\n";
-                cout << "PRICE PER NIGHT: ₱1,000\n";
-                cout << "NAME: SICKS SEVEN\n";
-                cout << "AGE: 67\n";
-                cout << "HOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/22/25\n";
-                cout << "Check-out: 10/23/25\n";
-                cout << "Special requests: Extra pillows and a cup of warm tea.\n";
-                cout << "Total Bill: ₱1,000\n";
-                break;
+        vector<string> mapRooms = {"1001","1002","1003","2001","2002","2003","2004","2005"};
+        if (guestchoice < 1 || guestchoice > 8) {
+            cout << "Invalid choice.\n";
+            reserved = false;
+        } else {
+            string roomSel = mapRooms[guestchoice - 1];
+            vector<string> f; string line;
+            if (findRecordByRoom(roomSel, f, line) && f.size() >= 10) {
+                string name = trim(f[3]);
+                int rate = 0;
+                int nights = 0;
+                try { rate = stoi(trim(f[2])); } catch(...) { rate = 0; }
+                try { nights = stoi(trim(f[8])); } catch(...) { nights = 0; }
 
-            case 2:
-                cout << "ROOM NUMBER: 1002\n";
-                cout << "ROOM TYPE: Single Bed Room\n";
-                cout << "PRICE PER NIGHT: ₱1,000\n";
-                cout << "NAME: ZACKT CORTA\n";
-                cout << "AGE: 18\n";
-                cout << "HOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/25/25\n";
-                cout << "Check-out: 10/27/25\n";
-                cout << "Special requests: Quiet room with good Wi-Fi signal.\n";
-                cout << "Total Bill: ₱2,000\n";
-                break;
-
-            case 3:
-                cout << "The room is available for reservations.\n";
-                reserved = false;
-                break;
-
-            case 4:
-                cout << "ROOM NUMBER: 2001\n";
-                cout << "ROOM TYPE: Double Bed Room\n";
-                cout << "PRICE PER NIGHT: ₱2,000\n";
-                cout << "NAME: TATANG CRUZ\n";
-                cout << "AGE: 100\n";
-                cout << "HOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/20/25\n";
-                cout << "Check-out: 10/23/25\n";
-                cout << "Special requests: Room close to elevator.\n";
-                cout << "Total Bill: ₱6,000\n";
-                break;
-
-            case 5:
-                cout << "The room is available for reservations.\n";
-                reserved = false;
-                break;
-
-            case 6:
-                cout << "ROOM NUMBER: 2002\n";
-                cout << "ROOM TYPE: Double Bed Room\n";
-                cout << "PRICE PER NIGHT: ₱2,000\n";
-                cout << "NAME: JOHN WICKED\n";
-                cout << "AGE: 31\n";
-                cout << "HOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/24/25\n";
-                cout << "Check-out: 10/26/25\n";
-                cout << "Special requests: Near parking area.\n";
-                cout << "Total Bill: ₱4,000\n";
-                break;
-
-            case 7:
-                cout << "The room is available for reservations.\n";
-                reserved = false;
-                break;
-
-            case 8:
-                cout << "ROOM NUMBER: 2003\n";
-                cout << "ROOM TYPE: Double Bed Room\n";
-                cout << "PRICE PER NIGHT: ₱2,000\n";
-                cout << "NAME: GINOONG HALIMAW\n";
-                cout << "AGE: 22\n";
-                cout << "HOW MANY PEOPLE: 1\n";
-                cout << "Check-in: 10/21/25\n";
-                cout << "Check-out: 10/24/25\n";
-                cout << "Special requests: Room with strong air conditioning.\n";
-                cout << "Total Bill: ₱6,000\n";
-                break;
-
-            default:
+                if (name == "UNRESERVED" || name == "-") {
+                    cout << "The room is available for reservations.\n";
+                    reserved = false;
+                } else {
+                    cout << "ROOM NUMBER: " << roomSel << "\n";
+                    cout << "ROOM TYPE: " << trim(f[1]) << "\n";
+                    cout << "PRICE PER NIGHT: ₱" << rate << "\n";
+                    cout << "NAME: " << name << "\n";
+                    cout << "AGE: " << trim(f[4]) << "\n";
+                    cout << "HOW MANY PEOPLE: " << trim(f[5]) << "\n";
+                    cout << "Check-in: " << trim(f[6]) << "\n";
+                    cout << "Check-out: " << trim(f[7]) << "\n";
+                    cout << "Special requests: " << trim(f[9]) << "\n";
+                    cout << "Total Bill: ₱" << (nights * rate) << "\n";
+                    reserved = true;
+                }
+            } else {
                 cout << "Invalid choice.\n";
                 reserved = false;
-                break;
+            }
         }
 
         // Only reserved rooms will ask for email and send bill
@@ -834,51 +774,26 @@ void invoiceSystem() {
         cin >> guestChoice;
         cout << endl;
 
-        switch (guestChoice) {
-            case 1:
-                printInvoice("SICKS SEVEN", 67, "1001", "Single Bed Room",
-                             "10/20/25", "10/23/25", 3, 1000,
-                             "Cash", "Paid", "Extra pillows and a cup of warm tea before bed.");
-                break;
-            case 2:
-                printInvoice("ZACKT CORTA", 18, "1002", "Single Bed Room",
-                             "10/25/25", "10/27/25", 2, 1000,
-                             "Cash", "Paid", "Quiet room with good Wi-Fi signal for gaming.");
-                break;
-            case 3:
-                cout << "ROOM NUMBER: 1003\nROOM TYPE: Single Bed Room\nPRICE PER NIGHT: ₱1,000" << endl;
-                cout << "This room is available for reservations.\n";
-                cout << "Returning to system...\n\n";
-                break;
-            case 4:
-                printInvoice("TATANG CRUZ", 100, "2001", "Double Bed Room",
-                             "10/10/25", "10/15/25", 5, 2000,
-                             "Cash", "Paid", "Wheelchair access and soft lighting.");
-                break;
-            case 5:
-                cout << "ROOM NUMBER: 2002\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱2,000" << endl;
-                cout << "This room is available for reservations.\n";
-                cout << "Returning to system...\n\n";
-                break;
-            case 6:
-                printInvoice("JOHN WICKED", 31, "2003", "Double Bed Room",
-                             "10/18/25", "10/22/25", 4, 2000,
-                             "Cash", "Paid", "Soundproof room and early breakfast delivery.");
-                break;
-            case 7:
-                cout << "ROOM NUMBER: 2004\nROOM TYPE: Double Bed Room\nPRICE PER NIGHT: ₱2,000" << endl;
-                cout << "This room is available for reservations.\n";
-                cout << "Returning to system...\n\n";
-                break;
-            case 8:
-                printInvoice("GINOONG HALIMAW", 22, "2005", "Double Bed Room",
-                             "10/23/25", "10/26/25", 3, 2000,
-                             "Cash", "Paid", "Room near gym with midnight snack delivery.");
-                break;
-            default:
-                cout << "Invalid selection. Please choose 1–8.\n";
-                cout << "Returning to system...\n\n";
-                break;
+        vector<string> mapRooms = {"1001","1002","1003","2001","2002","2003","2004","2005"};
+        if (guestChoice < 1 || guestChoice > 8) {
+            cout << "Invalid selection. Please choose 1–8.\n";
+        } else {
+            string roomSel = mapRooms[guestChoice - 1];
+            vector<string> f; string line;
+            if (findRecordByRoom(roomSel, f, line) && f.size() >= 10) {
+                string name = trim(f[3]);
+                if (name == "UNRESERVED" || name == "-") {
+                    cout << "ROOM NUMBER: " << roomSel << "\nROOM TYPE: " << trim(f[1]) << "\nSTATUS: Available for reservation.\n";
+                    cout << "Returning to system...\n\n";
+                } else {
+                    int rate = 0, nights = 0;
+                    try { rate = stoi(trim(f[2])); } catch(...) { rate = 0; }
+                    try { nights = stoi(trim(f[8])); } catch(...) { nights = 0; }
+                    printInvoice(trim(f[3]), stoi(trim(f[4])), roomSel, trim(f[1]), trim(f[6]), trim(f[7]), nights, rate, "Cash", "Paid", trim(f[9]));
+                }
+            } else {
+                cout << "Data not found for that room.\n";
+            }
         }
 
         cout << "\nDo you want to return to the system? (Y/N): ";
@@ -892,18 +807,28 @@ void invoiceSystem() {
 // ---------- STAFF FEATURES ----------
 void analyticsReport() {
     cout<<"Total guests this month: 67"<<endl;
-    cout<<"Most common age (7-range): 26-33 (38.07%)"<<endl; // use age variable if available
+    cout<<"Most common age (7-range): 26-33 (38.07%)"<<endl; // static text preserved
     cout<<"Most Popular Room (%): Single (41.23%)"<<endl;
     cout<<"Highest peak (For 1 day): 27/28 Rooms Occupied"<<endl;
 }
 
 void realTimeAvailability() {
-    cout << "Real-time availability display (sample):\n";
-    cout << "Room 1001 - Available\nRoom 1002 - Occupied\nRoom 1003 - Available\nRoom 2001 - Occupied\n";
+    cout << "Real-time availability display (current DB snapshot):\n";
+    ifstream fin(DB_FILENAME);
+    if (!fin) { cout << "DB missing.\n"; return; }
+    string line;
+    while (getline(fin, line)) {
+        vector<string> f = splitFields(line, '|');
+        if (f.size() >= 10) {
+            string room = trim(f[0]);
+            string name = trim(f[3]);
+            cout << "Room " << room << " - " << ((name=="UNRESERVED" || name=="-") ? "Available" : "Occupied by " + name) << "\n";
+        }
+    }
+    fin.close();
 }
 
 void reservationCancellation() {
-    // Reuse cancelBook logic (but keep wrapper to match flow)
     cout << "Reservation Cancellation selected.\n";
     cancelBook();
 }
@@ -947,7 +872,6 @@ void staffMenu() {
                 reservationCancellation();
                 break;
             case 7:
-                // Provide a small in-staff menu for guest-booking functions
                 {
                     int sub;
                     cout << "Staff Booking Tools:\n[1] listRooms\n[2] listAvailable\n[3] bookRoom\n[4] viewBooked\nEnter choice: ";
@@ -961,12 +885,10 @@ void staffMenu() {
                     }
                 }
                 break;
-                
-             case 8:
+            case 8:
                 cout<<"Shutting Down..."<<endl;
                 loop1=false;
                 break;
- 
             default:
                 cout<<"Unknown Command Detected, Please Try Again"<<endl;
                 cout<<""<<endl;
@@ -1047,6 +969,9 @@ void shutdownSystem() {
 
 // ---------- MAIN ----------
 int main() {
+    // Initialize DB if missing
+    initializeDatabase();
+
     GuestInfo guest;
     // run single integrated flow
     introduction(guest);
