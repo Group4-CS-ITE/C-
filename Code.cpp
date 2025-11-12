@@ -93,7 +93,8 @@ vector<string> splitFields(const string &line, char delim) {
 bool updateRecordLine(const string &oldLine, const string &newLine) {
     ifstream fin(DB_FILENAME);
     if (!fin) return false;
-    ofstream fout("db_tmp.txt");
+    ofstream fout;
+    fout.open("db_tmp.txt", ios::app);
     string line;
     bool replaced = false;
     while (getline(fin, line)) {
@@ -111,28 +112,43 @@ bool updateRecordLine(const string &oldLine, const string &newLine) {
         remove("db_tmp.txt");
         return false;
     }
-    remove(DB_FILENAME.c_str());
-    rename("db_tmp.txt", DB_FILENAME.c_str());
+    remove("hotel_database.txt");
+    rename("db_tmp.txt", "hotel_database.txt");
     return true;
 }
 
 // Find record by room number. If found, returns true and fills outFields (split by '|') and outLine (original).
 bool findRecordByRoom(const string &roomNum, vector<string> &outFields, string &outLine) {
+    const string DB_FILENAME = "hotel_database.txt";
     ifstream fin(DB_FILENAME);
-    if (!fin) return false;
+    if (!fin) {
+        cerr << "Database file not found: " << DB_FILENAME << endl;
+        return false;
+    }
+
     string line;
+    string trimmedInput = trim(roomNum);
+
     while (getline(fin, line)) {
-        vector<string> fields = splitFields(line, '|');
-        if (!fields.empty() && trim(fields[0]) == trim(roomNum)) {
-            outFields = fields;
-            outLine = line;
-            fin.close();
-            return true;
+        string trimmedLine = trim(line);
+        if (trimmedLine.empty()) continue;
+
+        vector<string> fields = splitFields(trimmedLine, '|');
+        if (!fields.empty()) {
+            string roomField = trim(fields[0]);
+            if (roomField == trimmedInput) {
+                outFields = fields;
+                outLine = line;
+                fin.close();
+                return true;
+            }
         }
     }
+
     fin.close();
     return false;
 }
+
 
 // Create default DB if missing
 void writeDefaultDatabaseIfMissing() {
@@ -246,29 +262,43 @@ void bookRoom() {
     // Adapted to single DB: mark an UNRESERVED room as occupied, writing guest info into the DB line
     cout << "Enter the room number you would like to book: ";
     string get_roomNum;
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    // cin.ignore(numeric_limits<streamsize>::max(), '\n');
     getline(cin, get_roomNum);
     get_roomNum = trim(get_roomNum);
-
-    vector<string> fields;
-    string origLine;
-    if (!findRecordByRoom(get_roomNum, fields, origLine)) {
-        cout << "Room number not found.\n";
-        return;
-    }
+    ifstream roomsFile;
+       roomsFile.open("hotel_database.txt", ios::in);
+   
+       string line, roomNum, roomType, price;
+       string origLine;
+       while(getline(roomsFile, line)) {
+           stringstream ss(line);
+           origLine = line;
+           getline(ss, roomNum, '|');
+           getline(ss, roomType, '|');
+           getline(ss, price, '|');
+           if(get_roomNum == roomNum){
+            break;
+           }
+       }
+    // vector<string> fields;
+    
+    // if (!findRecordByRoom(get_roomNum, fields, origLine)) {
+    //     cout << "Room number not found.\n";
+    //     return;
+    // }
     // fields layout: 0 roomNum|1 roomType|2 price|3 name|4 age|5 people|6 checkIn|7 checkOut|8 nights|9 note
-    string currName = trim(fields[3]);
-    if (currName != "UNRESERVED" && currName != "-") {
-        cout << "The room is already occupied.\n";
-        return;
-    }
+    // string currName = trim(fields[3]);
+    // if (currName != "UNRESERVED" && currName != "-") {
+    //     cout << "The room is already occupied.\n";
+    //     return;
+    // }
 
     // gather booking details from user
     string guestName;
-    int guestAge;
+    string guestAge;
     string numPeople;
     string checkIn, checkOut;
-    int nights;
+    string nights;
 
     cout << "Enter guest name: ";
     getline(cin, guestName);
@@ -291,9 +321,9 @@ void bookRoom() {
 
     // build new line replacing fields 3..9
     // Keep price intact at fields[2]
-    string newLine = fields[0] + "|" + fields[1] + "|" + fields[2] + "|"
-                     + guestName + "|" + to_string(guestAge) + "|" + numPeople + "|"
-                     + checkIn + "|" + checkOut + "|" + to_string(nights) + "|"
+    string newLine = roomNum + "|" + roomType + "|" + price + "|"
+                     + guestName + "|" + guestAge + "|" + numPeople + "|"
+                     + checkIn + "|" + checkOut + "|" + nights + "|"
                      + "Booked via system";
 
     if (updateRecordLine(origLine, newLine)) {
@@ -497,14 +527,22 @@ void customerManagement_v1() {
         cout << "      CUSTOMER MANAGEMENT     " << endl;
         cout << "==============================" << endl;
 
-        cout << "[1] SICKS SEVEN" << endl;
-        cout << "[2] ZACKT CORTA" << endl;
-        cout << "[3] -UNRESERVED-" << endl;
-        cout << "[4] TATANG CRUZ" << endl;
-        cout << "[5] -UNRESERVED-" << endl;
-        cout << "[6] JOHN WICKED" << endl;
-        cout << "[7] -UNRESERVED-" << endl;
-        cout << "[8] GINOONG HALIMAW" << endl;
+ifstream roomsFile;
+       roomsFile.open("hotel_database.txt", ios::in);
+   
+       string sline, roomNum, roomType, price, Dname;
+       string origLine;
+       int sCounter = 0;
+        while(getline(roomsFile, sline)) {
+            stringstream ss(sline);
+            origLine = sline;
+            getline(ss, roomNum, '|');
+            getline(ss, roomType, '|');
+            getline(ss, price, '|'); 
+            getline(ss, Dname, '|');
+            sCounter++;
+            cout << "["<<sCounter << "] " << Dname << "\n";
+       }
         cout << "==============================" << endl;
 
         cout << "Enter number (1-8): ";
@@ -569,14 +607,22 @@ void customerManagement_v2() {
         cout << "==============================\n";
         cout << "       CUSTOMER MANAGEMENT     \n";
         cout << "==============================\n";
-        cout << "[1] SICKS SEVEN\n";
-        cout << "[2] ZACKT CORTA\n";
-        cout << "[3] -UNRESERVED-\n";
-        cout << "[4] TATANG CRUZ\n";
-        cout << "[5] -UNRESERVED-\n";
-        cout << "[6] JOHN WICKED\n";
-        cout << "[7] -UNRESERVED-\n";
-        cout << "[8] GINOONG HALIMAW\n";
+ifstream roomsFile;
+       roomsFile.open("hotel_database.txt", ios::in);
+   
+       string line, roomNum, roomType, price, Dname;
+       string origLine;
+       int sCounter = 0;
+        while(getline(roomsFile, line)) {
+            stringstream ss(line);
+            origLine = line;
+            getline(ss, roomNum, '|');
+            getline(ss, roomType, '|');
+            getline(ss, price, '|'); 
+            getline(ss, Dname, '|');
+            sCounter++;
+            cout << "["<<sCounter << "] " << Dname << "\n";
+       }
         cout << "==============================\n";
         cout << "Enter number (1-8): ";
 
@@ -640,14 +686,28 @@ void billingSystem() {
 
     do {
         cout << "\n===== CUSTOMER MANAGEMENT SYSTEM =====\n";
-        cout << "[1] SICKS SEVEN\n";
-        cout << "[2] ZACKT CORTA\n";
-        cout << "[3] -UNRESERVED-\n";
-        cout << "[4] TATANG CRUZ\n";
-        cout << "[5] -UNRESERVED-\n";
-        cout << "[6] JOHN WICKED\n";
-        cout << "[7] -UNRESERVED-\n";
-        cout << "[8] GINOONG HALIMAW\n";
+    ifstream roomsFile;
+       roomsFile.open("hotel_database.txt", ios::in);
+   
+       string line, roomNum, roomType, price, Dname;
+       string origLine;
+       int sCounter = 0;
+        while(getline(roomsFile, line)) {
+            stringstream ss(line);
+            origLine = line;
+            getline(ss, roomNum, '|');
+            getline(ss, roomType, '|');
+            getline(ss, price, '|'); 
+            getline(ss, Dname, '|');
+            sCounter++;
+            cout << "["<<sCounter << "] " << Dname << "\n";
+       }
+
+        // while(sCounter != 0){
+            
+        //     sCounter++;
+        // }
+
         cout << "======================================\n\n";
 
         cout << "Enter number: ";
@@ -760,14 +820,21 @@ void invoiceSystem() {
         cout << "\n==============================\n";
         cout << "         HOTEL INVOICE        \n";
         cout << "==============================\n";
-        cout << "[1] Room 1001 - SICKS SEVEN\n";
-        cout << "[2] Room 1002 - ZACKT CORTA\n";
-        cout << "[3] Room 1003 - (UNRESERVED)\n";
-        cout << "[4] Room 2001 - TATANG CRUZ\n";
-        cout << "[5] Room 2002 - (UNRESERVED)\n";
-        cout << "[6] Room 2003 - JOHN WICKED\n";
-        cout << "[7] Room 2004 - (UNRESERVED)\n";
-        cout << "[8] Room 2005 - GINOONG HALIMAW\n";
+ifstream roomsFile;
+       roomsFile.open("hotel_database.txt", ios::in);
+       string line, roomNum, roomType, price, Dname;
+       string origLine;
+       int sCounter = 0;
+        while(getline(roomsFile, line)) {
+            stringstream ss(line);
+            origLine = line;
+            getline(ss, roomNum, '|');
+            getline(ss, roomType, '|');
+            getline(ss, price, '|'); 
+            getline(ss, Dname, '|');
+            sCounter++;
+            cout << "["<<sCounter << "] " << Dname << "\n";
+       }
         cout << "======================================\n\n";
 
         cout << "Enter number: ";
