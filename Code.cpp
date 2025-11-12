@@ -1,7 +1,3 @@
-// integrated_lumina.cpp
-// Full integration of all code blocks provided by the user.
-// All original text/logic preserved. Duplicate mains merged into one flow.
-
 #include <iostream>
 #include <fstream>
 #include <iomanip>
