@@ -1,0 +1,77 @@
+#include <iostream>
+#include <iomanip>
+#include <string>
+using namespace std;
+
+int main() {
+    string name;
+    int age, roomNumber, nights;
+    double roomRate = 0, totalAmount, discountedAmount, finalAmount;
+    char again;
+
+    do {
+        cout << "===== DISCOUNT =====\n";
+        cout << "Enter guest name: ";
+        getline(cin, name);
+
+        cout << "Enter age: ";
+        cin >> age;
+
+        cout << "Enter room number: ";
+        cin >> roomNumber;
+
+        cout << "Enter number of nights: ";
+        cin >> nights;
+
+        // Determine room type and rate
+        if (roomNumber >= 1000 && roomNumber < 2000) {
+            roomRate = 1000;
+            cout << "\nRoom Type: Single Room\n";
+        } 
+        else if (roomNumber >= 2000 && roomNumber < 3000) {
+            roomRate = 2000;
+            cout << "\nRoom Type: Double Room\n";
+        } 
+        else {
+            cout << "\nInvalid room number. Please use 1000+ or 2000+.\n";
+            cin.ignore();
+            cout << "\n------------------------------------\n";
+            continue;
+        }
+
+        totalAmount = roomRate * nights;
+
+        // Apply discounts
+        if (age >= 60) {
+            discountedAmount = totalAmount * 0.2; // 20% off
+            finalAmount = totalAmount - discountedAmount;
+            cout << "Discount applied: 20% (Senior Citizen)\n";
+        } 
+        else if (age < 18) {
+            discountedAmount = totalAmount * 0.1; // 10% off
+            finalAmount = totalAmount - discountedAmount;
+            cout << "Discount applied: 10% (Minor)\n";
+        } 
+        else {
+            discountedAmount = 0;
+            finalAmount = totalAmount;
+            cout << "No discount applied.\n";
+        }
+
+        cout << fixed << setprecision(2);
+        cout << "Room Rate: PHP " << roomRate << " per night\n";
+        cout << "Total Nights: " << nights << endl;
+        cout << "Total Amount: PHP " << totalAmount << endl;
+        cout << "Discount Amount: PHP " << discountedAmount << endl;
+        cout << "Final Amount to Pay: PHP " << finalAmount << endl;
+
+        cout << "\nDo you want to enter another reservation? (Y/N): ";
+        cin >> again;
+        cin.ignore(); // clear newline buffer
+        cout << "\n------------------------------------\n";
+
+    } while (again == 'Y' || again == 'y');
+
+    cout << "Exiting system... Thank you!\n";
+    return 0;
+}
